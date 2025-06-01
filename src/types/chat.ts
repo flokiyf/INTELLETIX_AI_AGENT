@@ -1,8 +1,9 @@
 export interface Message {
   id: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: Date;
+  isError?: boolean;
 }
 
 export interface ChatState {

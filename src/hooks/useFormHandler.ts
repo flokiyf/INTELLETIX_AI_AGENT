@@ -14,18 +14,18 @@ export const useFormHandler = ({ onFormSubmit, messageId }: UseFormHandlerProps)
     const formData = new FormData(form);
     
     // Convertir FormData en objet lisible
-    const data: Record<string, any> = {};
+    const data: Record<string, string | string[]> = {};
     
     formData.forEach((value, key) => {
       if (data[key]) {
         // Si la clé existe déjà, convertir en array (pour les checkboxes multiples)
         if (Array.isArray(data[key])) {
-          data[key].push(value);
+          (data[key] as string[]).push(value.toString());
         } else {
-          data[key] = [data[key], value];
+          data[key] = [data[key] as string, value.toString()];
         }
       } else {
-        data[key] = value;
+        data[key] = value.toString();
       }
     });
     
@@ -40,7 +40,7 @@ export const useFormHandler = ({ onFormSubmit, messageId }: UseFormHandlerProps)
     
   }, [onFormSubmit]);
 
-  const formatFormData = (data: Record<string, any>, form: HTMLFormElement): string => {
+  const formatFormData = (data: Record<string, string | string[]>, form: HTMLFormElement): string => {
     const formTitle = form.getAttribute('data-title') || 'Formulaire soumis';
     
     let formatted = `📋 **${formTitle}**\n\n`;
