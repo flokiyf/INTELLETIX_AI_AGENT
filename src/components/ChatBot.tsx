@@ -74,7 +74,9 @@ const ChatBot = () => {
     retryAttempt = 0
   ): Promise<any> => {
     try {
-      const response = await fetch('/api/chat', {
+      // Utiliser la fonction Netlify dédiée au lieu de l'API Next.js
+      console.log(`Tentative d'appel à la fonction Netlify: /.netlify/functions/chat (tentative ${retryAttempt + 1})`);
+      const response = await fetch('/.netlify/functions/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
