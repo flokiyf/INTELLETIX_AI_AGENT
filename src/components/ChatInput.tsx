@@ -6,15 +6,9 @@ interface ChatInputProps {
   onSendMessage: (message: string) => void;
   disabled?: boolean;
   placeholder?: string;
-  isLoading?: boolean;
 }
 
-const ChatInput = ({ 
-  onSendMessage, 
-  disabled = false, 
-  placeholder = "Partagez vos pensées avec l'IA...",
-  isLoading = false
-}: ChatInputProps) => {
+const ChatInput = ({ onSendMessage, disabled = false, placeholder = "Partagez vos pensées avec l'IA..." }: ChatInputProps) => {
   const [message, setMessage] = useState('');
 
   const handleSubmit = () => {
@@ -41,7 +35,7 @@ const ChatInput = ({
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyPress}
             placeholder={placeholder}
-            disabled={disabled || isLoading}
+            disabled={disabled}
             rows={1}
             className="w-full resize-none border-none outline-none text-sm md:text-base text-gray-800 placeholder-gray-400 bg-transparent font-medium leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ minHeight: '20px', maxHeight: '120px' }}
@@ -58,20 +52,20 @@ const ChatInput = ({
         {/* Send button */}
         <button
           onClick={handleSubmit}
-          disabled={disabled || isLoading || message.trim() === ''}
+          disabled={disabled || message.trim() === ''}
           className={`group relative flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex items-center justify-center font-bold transition-all duration-300 transform active:scale-95 shadow-lg ${
-            disabled || isLoading || message.trim() === ''
+            disabled || message.trim() === ''
               ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
               : 'bg-black text-white hover:bg-gray-800 hover:scale-110 shadow-xl hover:shadow-2xl'
           }`}
         >
           {/* Button glow effect */}
-          {!disabled && !isLoading && message.trim() !== '' && (
+          {!disabled && message.trim() !== '' && (
             <div className="absolute inset-0 bg-gradient-to-r from-black via-gray-700 to-black rounded-xl md:rounded-2xl opacity-0 group-hover:opacity-20 transition-opacity duration-300 blur-sm"></div>
           )}
           
           <div className="relative z-10">
-            {isLoading ? (
+            {disabled ? (
               <div className="flex space-x-0.5">
                 <div className="w-1 h-1 md:w-1.5 md:h-1.5 bg-gray-400 rounded-full animate-bounce"></div>
                 <div className="w-1 h-1 md:w-1.5 md:h-1.5 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>

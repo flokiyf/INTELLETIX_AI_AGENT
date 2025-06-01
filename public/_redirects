@@ -1,8 +1,0 @@
-# Redirection des API vers les fonctions Netlify
-/api/* /.netlify/functions/:splat 200!
-
-# Redirection spécifique pour l'API de chat
-/api/chat /.netlify/functions/openai-proxy 200!
-
-# Redirection fallback pour toutes les autres routes (SPA)
-/* /index.html 200 
