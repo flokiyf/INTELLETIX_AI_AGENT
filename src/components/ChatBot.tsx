@@ -1,31 +1,15 @@
 'use client';
 
-import { useState, useRef, useEffect, useId } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Message } from '@/types/chat';
 import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
 import { v4 as uuidv4 } from 'uuid';
 
-// Fonction pour générer un ID stable côté client et serveur
-const generateStableId = (prefix: string, index: number): string => {
-  return `${prefix}-${index}`;
-};
-
 const ChatBot = () => {
-  // Utiliser useId pour obtenir un préfixe stable pour ce composant
-  const idPrefix = useId().replace(/:/g, '');
-  const [messageIdCounter, setMessageIdCounter] = useState(0);
-  
-  // Générer un nouvel ID stable
-  const getNextMessageId = () => {
-    const nextId = `msg-${idPrefix}-${messageIdCounter}`;
-    setMessageIdCounter(prev => prev + 1);
-    return nextId;
-  };
-  
   const [messages, setMessages] = useState<Message[]>([
     {
-      id: 'welcome-message', // ID stable pour le message d'accueil
+      id: uuidv4(), // Using UUID for welcome message
       role: 'assistant',
       content: 'Bonjour ! Je suis l\'agent de l\'annuaire des entreprises de Sudbury. Je peux vous aider à trouver des entreprises locales en fonction de vos besoins. Veuillez utiliser le formulaire ci-dessous pour préciser votre recherche :',
       timestamp: new Date()
@@ -47,7 +31,7 @@ const ChatBot = () => {
     if (content.trim() === '' || isLoading) return;
 
     const userMessage: Message = {
-      id: getNextMessageId(),
+      id: uuidv4(), // Using UUID for user message
       role: 'user',
       content: content.trim(),
       timestamp: new Date()
@@ -82,7 +66,7 @@ const ChatBot = () => {
       }
 
       const assistantMessage: Message = {
-        id: getNextMessageId(),
+        id: uuidv4(), // Using UUID for assistant message
         role: 'assistant',
         content: data.message.content,
         timestamp: new Date()
@@ -180,12 +164,9 @@ const ChatBot = () => {
   };
 
   const clearChat = () => {
-    // Réinitialiser le compteur de messages
-    setMessageIdCounter(0);
-    
     setMessages([
       {
-        id: 'welcome-message', // ID stable pour le message d'accueil
+        id: uuidv4(), // Using UUID for new welcome message
         role: 'assistant',
         content: 'Bonjour ! Je suis l\'agent de l\'annuaire des entreprises de Sudbury. Je peux vous aider à trouver des entreprises locales en fonction de vos besoins. Veuillez utiliser le formulaire ci-dessous pour préciser votre recherche :',
         timestamp: new Date()
@@ -346,4 +327,4 @@ const ChatBot = () => {
   );
 };
 
-export default ChatBot; 
+export default ChatBot;
