@@ -27,7 +27,9 @@ const loadBusinessData = async () => {
   try {
     // En production (Netlify), charger le fichier depuis l'URL publique
     if (process.env.NODE_ENV === 'production') {
-      const response = await fetch('/data/sudbury_businesses.json');
+      // Utilisez une URL absolue pour éviter les problèmes de parsing
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://intelletix-ai-agent.netlify.app';
+      const response = await fetch(`${baseUrl}/data/sudbury_businesses.json`);
       if (!response.ok) {
         throw new Error(`Erreur lors du chargement des données: ${response.status}`);
       }
