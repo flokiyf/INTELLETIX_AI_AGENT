@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     
     // Recherche par ID (priorité la plus élevée)
     if (id) {
-      const business = getBusinessById(id);
+      const business = await getBusinessById(id);
       if (business) {
         return NextResponse.json({ business });
       } else {
@@ -40,24 +40,24 @@ export async function GET(req: NextRequest) {
       if (language) criteria.language = language;
       if (service) criteria.service = service;
       
-      const results = advancedSearch(criteria);
+      const results = await advancedSearch(criteria);
       return NextResponse.json({ businesses: results });
     }
     
     // Recherche par catégorie
     if (category) {
-      const businesses = getBusinessesByCategory(category);
+      const businesses = await getBusinessesByCategory(category);
       return NextResponse.json({ businesses });
     }
     
     // Recherche par terme
     if (term) {
-      const businesses = searchBusinesses(term);
+      const businesses = await searchBusinesses(term);
       return NextResponse.json({ businesses });
     }
     
     // Si aucun paramètre spécifique, renvoyer toutes les entreprises
-    const businesses = getAllBusinesses();
+    const businesses = await getAllBusinesses();
     return NextResponse.json({ businesses });
     
   } catch (error) {

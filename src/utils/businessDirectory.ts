@@ -1,4 +1,5 @@
-import businessData from '@/data/sudbury_businesses.json';
+// Utiliser un fetch pour accéder aux données en production, import statique en développement
+import staticBusinessData from '@/data/sudbury_businesses.json';
 
 export interface Business {
   id: string;
@@ -15,33 +16,76 @@ export interface Business {
   languages: string[];
 }
 
+// Variable pour stocker les données
+let businessData: { businesses: Business[], categories: string[] } = {
+  businesses: [],
+  categories: []
+};
+
+// Fonction pour charger les données
+const loadBusinessData = async () => {
+  try {
+    // En production (Netlify), charger le fichier depuis l'URL publique
+    if (process.env.NODE_ENV === 'production') {
+      const response = await fetch('/data/sudbury_businesses.json');
+      if (!response.ok) {
+        throw new Error(`Erreur lors du chargement des données: ${response.status}`);
+      }
+      businessData = await response.json();
+      console.log('Données chargées depuis l\'URL publique');
+    } else {
+      // En développement, utiliser l'import statique
+      businessData = staticBusinessData;
+      console.log('Données chargées depuis l\'import statique');
+    }
+  } catch (error) {
+    console.error('Erreur lors du chargement des données des entreprises:', error);
+    // Utiliser les données statiques comme fallback en cas d'erreur
+    businessData = staticBusinessData;
+  }
+};
+
+// Charger les données immédiatement
+loadBusinessData();
+
 // Récupérer toutes les entreprises
-export const getAllBusinesses = (): Business[] => {
+export const getAllBusinesses = async (): Promise<Business[]> => {
+  // Si les données ne sont pas encore chargées, attendre leur chargement
+  if (businessData.businesses.length === 0) {
+    await loadBusinessData();
+  }
   return businessData.businesses as Business[];
 };
 
 // Récupérer toutes les catégories
-export const getAllCategories = (): string[] => {
+export const getAllCategories = async (): Promise<string[]> => {
+  // Si les données ne sont pas encore chargées, attendre leur chargement
+  if (businessData.categories.length === 0) {
+    await loadBusinessData();
+  }
   return businessData.categories as string[];
 };
 
 // Récupérer les entreprises par catégorie
-export const getBusinessesByCategory = (category: string): Business[] => {
-  return getAllBusinesses().filter(business => 
+export const getBusinessesByCategory = async (category: string): Promise<Business[]> => {
+  const businesses = await getAllBusinesses();
+  return businesses.filter(business => 
     business.category.toLowerCase() === category.toLowerCase()
   );
 };
 
 // Récupérer une entreprise par ID
-export const getBusinessById = (id: string): Business | undefined => {
-  return getAllBusinesses().find(business => business.id === id);
+export const getBusinessById = async (id: string): Promise<Business | undefined> => {
+  const businesses = await getAllBusinesses();
+  return businesses.find(business => business.id === id);
 };
 
 // Rechercher des entreprises par terme de recherche
-export const searchBusinesses = (searchTerm: string): Business[] => {
+export const searchBusinesses = async (searchTerm: string): Promise<Business[]> => {
+  const businesses = await getAllBusinesses();
   const term = searchTerm.toLowerCase();
   
-  return getAllBusinesses().filter(business => 
+  return businesses.filter(business => 
     business.name.toLowerCase().includes(term) ||
     business.description.toLowerCase().includes(term) ||
     business.category.toLowerCase().includes(term) ||
@@ -58,8 +102,8 @@ export interface SearchCriteria {
   service?: string;
 }
 
-export const advancedSearch = (criteria: SearchCriteria): Business[] => {
-  let results = getAllBusinesses();
+export const advancedSearch = async (criteria: SearchCriteria): Promise<Business[]> => {
+  let results = await getAllBusinesses();
   
   if (criteria.term) {
     const term = criteria.term.toLowerCase();
@@ -112,7 +156,7 @@ export const formatBusinessInfo = (business: Business): string => {
 };
 
 // Suggérer des entreprises en fonction d'un besoin ou d'une requête
-export const suggestBusinesses = (userQuery: string): Business[] => {
+export const suggestBusinesses = async (userQuery: string): Promise<Business[]> => {
   // Liste de mots-clés associés à différentes catégories
   const keywordMap: Record<string, string[]> = {
     'Restaurant': ['manger', 'restaurant', 'nourriture', 'cuisine', 'repas', 'dîner', 'déjeuner', 'petit-déjeuner'],
@@ -129,6 +173,7 @@ export const suggestBusinesses = (userQuery: string): Business[] => {
     'Finance': ['banque', 'argent', 'prêt', 'hypothèque', 'finance']
   };
 
+  const businesses = await getAllBusinesses();
   const query = userQuery.toLowerCase();
   const matchedCategories: string[] = [];
 
@@ -141,7 +186,7 @@ export const suggestBusinesses = (userQuery: string): Business[] => {
 
   // Si des catégories correspondent, renvoyer les entreprises de ces catégories
   if (matchedCategories.length > 0) {
-    return getAllBusinesses().filter(business => 
+    return businesses.filter(business => 
       matchedCategories.includes(business.category)
     );
   }

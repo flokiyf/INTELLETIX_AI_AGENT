@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Configuration, OpenAIApi } from 'openai';
+import OpenAI from 'openai';
 
 // Vérification de la présence de la clé API
 if (!process.env.OPENAI_API_KEY) {
   console.error('ERREUR: La clé API OpenAI n\'est pas définie dans les variables d\'environnement');
 }
 
-const configuration = new Configuration({
+// Initialisation du client OpenAI avec la nouvelle syntaxe
+const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
-const openai = new OpenAIApi(configuration);
 
 // Cache simple en mémoire pour les requêtes fréquentes (en production, utiliser Redis ou similaire)
 const responseCache = new Map();
@@ -88,17 +88,17 @@ export async function POST(req: NextRequest) {
     rateLimitStore.set(ip, userRateLimit);
 
     // Définition du timeout pour éviter les requêtes infinies
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Timeout de la requête')), 30000) // 30 secondes
-    );
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => abortController.abort(), 30000); // 30 secondes
 
-    // Appel à l'API OpenAI avec timeout
-    const openaiPromise = openai.createChatCompletion({
-      model: 'gpt-4-turbo',
-      messages: [
-        {
-          role: 'system',
-          content: `Tu es un agent d'annuaire d'entreprises pour la ville de Sudbury, appelé "Sudbury Business Directory". 
+    try {
+      // Appel à l'API OpenAI avec la nouvelle syntaxe
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4',
+        messages: [
+          {
+            role: 'system',
+            content: `Tu es un agent d'annuaire d'entreprises pour la ville de Sudbury, appelé "Sudbury Business Directory". 
 Tu aides les utilisateurs à trouver des entreprises et services locaux à Sudbury en fonction de leurs besoins.
 
 INSTRUCTIONS IMPORTANTES :
@@ -135,44 +135,54 @@ RÉPONSES PARFAITES ET COMPLÈTES :
 Réponds toujours de façon utile, courtoise et professionnelle, en mettant l'accent sur la précision et l'exhaustivité des informations fournies.
 
 IMPORTANT: Tu n'as pas besoin de t'excuser de ne pas avoir accès en temps réel à Internet, car tu as déjà une base de données complète des entreprises de Sudbury.`
-        },
-        ...messages
-      ],
-      max_tokens: 800,
-      temperature: 0.7,
-    });
+          },
+          ...messages
+        ],
+        max_tokens: 800,
+        temperature: 0.7,
+      }, {
+        signal: abortController.signal
+      });
 
-    // Résolution de la promesse avec timeout
-    const completion = await Promise.race([openaiPromise, timeoutPromise]) as any;
-    const assistantMessage = completion.data.choices[0]?.message;
+      // Nettoyage du timeout
+      clearTimeout(timeoutId);
 
-    if (!assistantMessage) {
-      return NextResponse.json(
-        { error: 'Aucune réponse générée' },
-        { status: 500 }
-      );
+      const assistantMessage = completion.choices[0]?.message;
+
+      if (!assistantMessage) {
+        return NextResponse.json(
+          { error: 'Aucune réponse générée' },
+          { status: 500 }
+        );
+      }
+
+      // Mise en cache de la réponse
+      responseCache.set(cacheKey, {
+        data: assistantMessage,
+        expiry: Date.now() + CACHE_TTL
+      });
+
+      return NextResponse.json({ message: assistantMessage });
+    } catch (error: any) {
+      // Nettoyage du timeout en cas d'erreur
+      clearTimeout(timeoutId);
+      
+      // Propagation de l'erreur pour être traitée dans le bloc catch extérieur
+      throw error;
     }
-
-    // Mise en cache de la réponse
-    responseCache.set(cacheKey, {
-      data: assistantMessage,
-      expiry: Date.now() + CACHE_TTL
-    });
-
-    return NextResponse.json({ message: assistantMessage });
   } catch (error: any) {
     console.error('Erreur API OpenAI:', error);
     
     // Gestion des différentes erreurs possibles
-    if (error.response?.status === 429) {
-      return NextResponse.json(
-        { error: 'Quota OpenAI dépassé. Veuillez réessayer plus tard.' },
-        { status: 429 }
-      );
-    } else if (error.message === 'Timeout de la requête') {
+    if (error.name === 'AbortError') {
       return NextResponse.json(
         { error: 'La requête a pris trop de temps. Veuillez réessayer.' },
         { status: 408 }
+      );
+    } else if (error.status === 429) {
+      return NextResponse.json(
+        { error: 'Quota OpenAI dépassé. Veuillez réessayer plus tard.' },
+        { status: 429 }
       );
     } else if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
       return NextResponse.json(
