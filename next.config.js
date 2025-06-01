@@ -8,7 +8,6 @@ const nextConfig = {
     ignoreDuringBuilds: true, // Ignorer ESLint lors du build
   },
   // Utilisation optimisée des ressources statiques
-  optimizeFonts: true,
   images: {
     domains: ['your-domain.com'], // Ajoutez les domaines si nécessaire
     // Configurez les tailles d'image pour l'optimisation
