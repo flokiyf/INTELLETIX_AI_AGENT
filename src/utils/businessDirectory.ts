@@ -37,50 +37,13 @@ const loadBusinessData = async () => {
   logToConsole(`Environnement: ${process.env.NODE_ENV}`);
   
   try {
-    // En production (Netlify), charger le fichier depuis l'URL publique
-    if (process.env.NODE_ENV === 'production') {
-      // Utilisez une URL absolue pour éviter les problèmes de parsing
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://intelletix-ai-agent.netlify.app';
-      const jsonUrl = `${baseUrl}/data/sudbury_businesses.json`;
-      
-      logToConsole(`Tentative de chargement depuis URL: ${jsonUrl}`);
-      
-      try {
-        const response = await fetch(jsonUrl);
-        
-        if (!response.ok) {
-          logToConsole(`Erreur HTTP lors du chargement: ${response.status} ${response.statusText}`);
-          throw new Error(`Erreur lors du chargement des données: ${response.status}`);
-        }
-        
-        const contentType = response.headers.get('content-type');
-        logToConsole(`Type de contenu reçu: ${contentType}`);
-        
-        const data = await response.json();
-        logToConsole('Données JSON analysées avec succès', {
-          businessCount: data.businesses?.length,
-          categoryCount: data.categories?.length
-        });
-        
-        businessData = data;
-        logToConsole('Données chargées depuis l\'URL publique');
-      } catch (fetchError: any) {
-        logToConsole('Erreur fetch détaillée', {
-          name: fetchError.name,
-          message: fetchError.message,
-          cause: fetchError.cause,
-          stack: fetchError.stack
-        });
-        throw fetchError;
-      }
-    } else {
-      // En développement, utiliser l'import statique
-      businessData = staticBusinessData;
-      logToConsole('Données chargées depuis l\'import statique', {
-        businessCount: businessData.businesses?.length,
-        categoryCount: businessData.categories?.length
-      });
-    }
+    // Utiliser directement les données statiques quel que soit l'environnement
+    // pour éviter les problèmes de fetch en production
+    businessData = staticBusinessData;
+    logToConsole('Données chargées depuis l\'import statique', {
+      businessCount: businessData.businesses?.length,
+      categoryCount: businessData.categories?.length
+    });
   } catch (error: any) {
     logToConsole('Erreur lors du chargement des données des entreprises', {
       name: error.name,
@@ -89,9 +52,8 @@ const loadBusinessData = async () => {
       cause: error.cause
     });
     
-    // Utiliser les données statiques comme fallback en cas d'erreur
-    logToConsole('Utilisation des données statiques comme fallback');
-    businessData = staticBusinessData;
+    // Assurer que nous avons au moins une structure vide
+    businessData = { businesses: [], categories: [] };
   }
 };
 
@@ -105,7 +67,7 @@ export const getAllBusinesses = async (): Promise<Business[]> => {
     logToConsole('Données manquantes, rechargement...');
     await loadBusinessData();
   }
-  
+   
   logToConsole(`Retour de ${businessData.businesses.length} entreprises`);
   return businessData.businesses as Business[];
 };
@@ -117,7 +79,7 @@ export const getAllCategories = async (): Promise<string[]> => {
     logToConsole('Catégories manquantes, rechargement...');
     await loadBusinessData();
   }
-  
+   
   logToConsole(`Retour de ${businessData.categories.length} catégories`);
   return businessData.categories as string[];
 };
@@ -155,7 +117,7 @@ export const searchBusinesses = async (searchTerm: string): Promise<Business[]> 
     business.subcategory.toLowerCase().includes(term) ||
     business.services.some(service => service.toLowerCase().includes(term))
   );
-  
+   
   logToConsole(`Trouvé ${results.length} résultats pour le terme "${searchTerm}"`);
   return results;
 };
@@ -202,7 +164,7 @@ export const advancedSearch = async (criteria: SearchCriteria): Promise<Business
       )
     );
   }
-  
+   
   logToConsole(`Résultats de la recherche avancée: ${results.length} entreprises`);
   return results;
 };
@@ -226,7 +188,7 @@ export const formatBusinessInfo = (business: Business): string => {
 // Suggérer des entreprises en fonction d'un besoin ou d'une requête
 export const suggestBusinesses = async (userQuery: string): Promise<Business[]> => {
   logToConsole(`Suggestion d'entreprises pour la requête: "${userQuery}"`);
-  
+   
   // Liste de mots-clés associés à différentes catégories
   const keywordMap: Record<string, string[]> = {
     'Restaurant': ['manger', 'restaurant', 'nourriture', 'cuisine', 'repas', 'dîner', 'déjeuner', 'petit-déjeuner'],
@@ -253,7 +215,7 @@ export const suggestBusinesses = async (userQuery: string): Promise<Business[]> 
       matchedCategories.push(category);
     }
   });
-
+ 
   logToConsole(`Catégories correspondantes: ${matchedCategories.join(', ') || 'Aucune'}`);
 
   // Si des catégories correspondent, renvoyer les entreprises de ces catégories
