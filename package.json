@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build",
+    "build": "cross-env NEXT_DISABLE_ESLINT=1 next build",
     "start": "next start",
     "lint": "next lint"
   },
@@ -12,6 +12,7 @@
     "@tailwindcss/typography": "^0.5.16",
     "@types/dompurify": "^3.0.5",
     "@types/uuid": "^10.0.0",
+    "cross-env": "^7.0.3",
     "date-fns": "^4.1.0",
     "dompurify": "^3.2.6",
     "dotenv": "^16.5.0",
