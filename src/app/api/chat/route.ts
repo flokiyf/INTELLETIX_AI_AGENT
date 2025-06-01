@@ -1,22 +1,99 @@
 import { NextRequest, NextResponse } from 'next/server';
-import OpenAI from 'openai';
+import { Configuration, OpenAIApi } from 'openai';
 
-const openai = new OpenAI({
+// Vérification de la présence de la clé API
+if (!process.env.OPENAI_API_KEY) {
+  console.error('ERREUR: La clé API OpenAI n\'est pas définie dans les variables d\'environnement');
+}
+
+const configuration = new Configuration({
   apiKey: process.env.OPENAI_API_KEY,
 });
+const openai = new OpenAIApi(configuration);
+
+// Cache simple en mémoire pour les requêtes fréquentes (en production, utiliser Redis ou similaire)
+const responseCache = new Map();
+const CACHE_TTL = 1000 * 60 * 60; // 1 heure en ms
+
+// Structure pour le rate limiting (à remplacer par Redis en production)
+const rateLimitStore = new Map();
+const RATE_LIMIT_MAX = 50; // Requêtes maximales par IP
+const RATE_LIMIT_WINDOW = 60 * 60 * 1000; // Fenêtre de 1 heure en ms
+
+// Fonction de validation des messages
+function validateMessages(messages: any[]): boolean {
+  if (!Array.isArray(messages)) return false;
+  return messages.every(msg => 
+    msg && 
+    typeof msg === 'object' && 
+    (msg.role === 'user' || msg.role === 'assistant') && 
+    typeof msg.content === 'string' &&
+    msg.content.length < 4000 // Limite raisonnable pour éviter les abus
+  );
+}
 
 export async function POST(req: NextRequest) {
   try {
-    const { messages } = await req.json();
-
-    if (!messages || !Array.isArray(messages)) {
+    // Récupération de l'IP pour le rate limiting
+    const ip = req.headers.get('x-forwarded-for') || 'unknown-ip';
+    
+    // Vérification du rate limit
+    const now = Date.now();
+    const userRateLimit = rateLimitStore.get(ip) || { count: 0, resetAt: now + RATE_LIMIT_WINDOW };
+    
+    // Réinitialisation du compteur si la fenêtre est passée
+    if (userRateLimit.resetAt < now) {
+      userRateLimit.count = 0;
+      userRateLimit.resetAt = now + RATE_LIMIT_WINDOW;
+    }
+    
+    // Vérification si le quota est dépassé
+    if (userRateLimit.count >= RATE_LIMIT_MAX) {
       return NextResponse.json(
-        { error: 'Messages array is required' },
+        { error: 'Quota de requêtes dépassé. Veuillez réessayer plus tard.' },
+        { status: 429 }
+      );
+    }
+    
+    // Extraction et validation du corps de la requête
+    let messages;
+    try {
+      const body = await req.json();
+      messages = body.messages;
+    } catch (e) {
+      return NextResponse.json(
+        { error: 'Format de requête invalide' },
         { status: 400 }
       );
     }
 
-    const completion = await openai.chat.completions.create({
+    if (!messages || !validateMessages(messages)) {
+      return NextResponse.json(
+        { error: 'Format de messages invalide ou manquant' },
+        { status: 400 }
+      );
+    }
+
+    // Génération d'une clé de cache basée sur les messages
+    const cacheKey = JSON.stringify(messages);
+    
+    // Vérification du cache
+    const cachedResponse = responseCache.get(cacheKey);
+    if (cachedResponse && cachedResponse.expiry > Date.now()) {
+      return NextResponse.json({ message: cachedResponse.data });
+    }
+
+    // Incrémentation du compteur de rate limit
+    userRateLimit.count++;
+    rateLimitStore.set(ip, userRateLimit);
+
+    // Définition du timeout pour éviter les requêtes infinies
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Timeout de la requête')), 30000) // 30 secondes
+    );
+
+    // Appel à l'API OpenAI avec timeout
+    const openaiPromise = openai.createChatCompletion({
       model: 'gpt-4-turbo',
       messages: [
         {
@@ -65,7 +142,9 @@ IMPORTANT: Tu n'as pas besoin de t'excuser de ne pas avoir accès en temps réel
       temperature: 0.7,
     });
 
-    const assistantMessage = completion.choices[0]?.message;
+    // Résolution de la promesse avec timeout
+    const completion = await Promise.race([openaiPromise, timeoutPromise]) as any;
+    const assistantMessage = completion.data.choices[0]?.message;
 
     if (!assistantMessage) {
       return NextResponse.json(
@@ -74,9 +153,34 @@ IMPORTANT: Tu n'as pas besoin de t'excuser de ne pas avoir accès en temps réel
       );
     }
 
+    // Mise en cache de la réponse
+    responseCache.set(cacheKey, {
+      data: assistantMessage,
+      expiry: Date.now() + CACHE_TTL
+    });
+
     return NextResponse.json({ message: assistantMessage });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Erreur API OpenAI:', error);
+    
+    // Gestion des différentes erreurs possibles
+    if (error.response?.status === 429) {
+      return NextResponse.json(
+        { error: 'Quota OpenAI dépassé. Veuillez réessayer plus tard.' },
+        { status: 429 }
+      );
+    } else if (error.message === 'Timeout de la requête') {
+      return NextResponse.json(
+        { error: 'La requête a pris trop de temps. Veuillez réessayer.' },
+        { status: 408 }
+      );
+    } else if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
+      return NextResponse.json(
+        { error: 'Problème de connexion avec le service OpenAI. Veuillez réessayer.' },
+        { status: 503 }
+      );
+    }
+    
     return NextResponse.json(
       { error: 'Erreur lors de la génération de la réponse' },
       { status: 500 }

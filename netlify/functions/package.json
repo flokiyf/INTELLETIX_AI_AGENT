@@ -1,0 +1,16 @@
+{
+  "name": "intelletix-netlify-functions",
+  "version": "1.0.0",
+  "description": "Fonctions Netlify pour Intelletix AI Agent",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "setup": "node setup-env.js"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "node-fetch": "^2.6.9",
+    "querystring": "^0.2.1"
+  }
+} 

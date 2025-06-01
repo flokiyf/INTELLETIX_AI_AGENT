@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useId } from 'react';
+import { useState, useRef, useEffect, useId, useCallback } from 'react';
 import { Message } from '@/types/chat';
 import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
@@ -10,6 +10,10 @@ import { v4 as uuidv4 } from 'uuid';
 const generateStableId = (prefix: string, index: number): string => {
   return `${prefix}-${index}`;
 };
+
+// Constantes pour la gestion des erreurs
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1500; // 1.5 secondes entre les tentatives
 
 const ChatBot = () => {
   // Utiliser useId pour obtenir un préfixe stable pour ce composant
@@ -33,7 +37,9 @@ const ChatBot = () => {
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [connectionLost, setConnectionLost] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -42,6 +48,90 @@ const ChatBot = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Vérifier la connectivité lors du chargement initial
+  useEffect(() => {
+    const checkConnectivity = () => {
+      setConnectionLost(!navigator.onLine);
+    };
+
+    // Vérifier immédiatement
+    checkConnectivity();
+
+    // Ajouter des écouteurs d'événements pour les changements de connectivité
+    window.addEventListener('online', () => setConnectionLost(false));
+    window.addEventListener('offline', () => setConnectionLost(true));
+
+    return () => {
+      window.removeEventListener('online', () => setConnectionLost(false));
+      window.removeEventListener('offline', () => setConnectionLost(true));
+    };
+  }, []);
+
+  const sendMessageWithRetry = useCallback(async (
+    messages: any[], 
+    userMessageId: string, 
+    retryAttempt = 0
+  ): Promise<any> => {
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: messages.map(msg => ({
+            role: msg.role,
+            content: msg.content
+          }))
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(
+          errorData?.error || 
+          `Erreur ${response.status}: ${response.statusText || 'Erreur lors de l\'envoi du message'}`
+        );
+      }
+
+      return await response.json();
+    } catch (err) {
+      // Si nous avons encore des tentatives et que c'est une erreur réseau
+      if (
+        retryAttempt < MAX_RETRIES && 
+        (err instanceof Error && 
+          (err.message.includes('fetch failed') || 
+           err.message.includes('network') ||
+           err.message.includes('failed to fetch')))
+      ) {
+        console.log(`Tentative de reconnexion ${retryAttempt + 1}/${MAX_RETRIES}...`);
+        
+        // Ajouter un message temporaire indiquant la tentative de reconnexion
+        setMessages(prev => [
+          ...prev.filter(m => m.id !== 'retry-message'),
+          {
+            id: 'retry-message',
+            role: 'system',
+            content: `⚠️ Problème de connexion. Tentative de reconnexion ${retryAttempt + 1}/${MAX_RETRIES}...`,
+            timestamp: new Date()
+          }
+        ]);
+        
+        // Attendre avant de réessayer
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        
+        // Incrémenter le compteur de tentatives
+        setRetryCount(retryAttempt + 1);
+        
+        // Réessayer
+        return sendMessageWithRetry(messages, userMessageId, retryAttempt + 1);
+      }
+      
+      // Si toutes les tentatives ont échoué, propager l'erreur
+      throw err;
+    }
+  }, []);
 
   const sendMessage = async (content: string) => {
     if (content.trim() === '' || isLoading) return;
@@ -56,30 +146,26 @@ const ChatBot = () => {
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
     setError(null);
+    setRetryCount(0);
+
+    // Supprimer tout message système précédent
+    setMessages(prev => prev.filter(m => m.id !== 'retry-message' && m.id !== 'error-message'));
 
     try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messages: [...messages, userMessage].map(msg => ({
-            role: msg.role,
-            content: msg.content
-          }))
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Erreur lors de l\'envoi du message');
+      // Vérifier la connectivité
+      if (!navigator.onLine) {
+        throw new Error('Vous êtes hors ligne. Veuillez vérifier votre connexion internet.');
       }
 
-      const data = await response.json();
+      const allMessages = [...messages, userMessage];
+      const data = await sendMessageWithRetry(allMessages, userMessage.id);
       
       if (data.error) {
         throw new Error(data.error);
       }
+
+      // Supprimer le message de tentative de reconnexion s'il existe
+      setMessages(prev => prev.filter(m => m.id !== 'retry-message'));
 
       const assistantMessage: Message = {
         id: getNextMessageId(),
@@ -90,7 +176,19 @@ const ChatBot = () => {
 
       setMessages(prev => [...prev, assistantMessage]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Une erreur est survenue');
+      const errorMessage = err instanceof Error ? err.message : 'Une erreur est survenue';
+      setError(errorMessage);
+      
+      // Ajouter un message d'erreur visible dans la conversation
+      setMessages(prev => [
+        ...prev.filter(m => m.id !== 'error-message' && m.id !== 'retry-message'),
+        {
+          id: 'error-message',
+          role: 'system',
+          content: `⚠️ <strong>Erreur:</strong> ${errorMessage}<br/>Veuillez réessayer votre demande.`,
+          timestamp: new Date()
+        }
+      ]);
     } finally {
       setIsLoading(false);
     }
@@ -193,6 +291,29 @@ const ChatBot = () => {
     ]);
     setError(null);
   };
+
+  // Afficher une alerte si la connexion est perdue
+  if (connectionLost) {
+    return (
+      <div className="flex flex-col h-screen max-w-5xl mx-auto bg-white shadow-2xl">
+        <div className="flex-grow flex items-center justify-center p-6">
+          <div className="text-center p-8 bg-red-50 rounded-lg border border-red-200 max-w-md">
+            <svg className="w-16 h-16 mx-auto text-red-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <h2 className="text-xl font-bold text-red-700 mb-2">Connexion perdue</h2>
+            <p className="text-gray-700 mb-4">Vous semblez être hors ligne. Veuillez vérifier votre connexion internet et recharger la page.</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+            >
+              Recharger la page
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-screen max-w-5xl mx-auto bg-white shadow-2xl">

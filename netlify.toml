@@ -1,8 +1,49 @@
-# example netlify.toml
+# Configuration Netlify optimisée pour la production
 [build]
   command = "npm run build"
   functions = "netlify/functions"
   publish = ".next"
+
+  ## Configuration des variables d'environnement
+  [build.environment]
+    NODE_ENV = "production"
+    NEXT_TELEMETRY_DISABLED = "1"
+    # La clé API OpenAI sera configurée dans les variables d'environnement Netlify
+
+# Configuration des plugins
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# En-têtes HTTP pour améliorer la sécurité et les performances
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer-when-downgrade"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+    Cache-Control = "public, max-age=3600"
+
+# En-têtes spécifiques pour les ressources statiques
+[[headers]]
+  for = "/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Redirection pour assurer que toutes les requêtes vont vers HTTPS
+[[redirects]]
+  from = "http://*"
+  to = "https://:splat"
+  status = 301
+  force = true
+
+# Redirection pour le SPA (Single Page Application)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
 
   ## Uncomment to use this redirect for Single Page Applications like create-react-app.
   ## Not needed for static site generators.
