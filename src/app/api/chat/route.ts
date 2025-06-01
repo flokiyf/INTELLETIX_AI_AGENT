@@ -1,9 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 
+// Fonction utilitaire pour le logging
+const logToConsole = (message: string, data?: any) => {
+  const timestamp = new Date().toISOString();
+  console.log(`[CHAT-API ${timestamp}] ${message}`);
+  if (data) {
+    console.log(JSON.stringify(data, null, 2));
+  }
+};
+
 // Vérification de la présence de la clé API
 if (!process.env.OPENAI_API_KEY) {
-  console.error('ERREUR: La clé API OpenAI n\'est pas définie dans les variables d\'environnement');
+  logToConsole('ERREUR: La clé API OpenAI n\'est pas définie dans les variables d\'environnement');
+} else {
+  logToConsole('Clé API OpenAI correctement configurée');
 }
 
 // Initialisation du client OpenAI avec la nouvelle syntaxe
@@ -33,9 +44,12 @@ function validateMessages(messages: any[]): boolean {
 }
 
 export async function POST(req: NextRequest) {
+  logToConsole('Nouvelle requête chat reçue');
+  
   try {
     // Récupération de l'IP pour le rate limiting
     const ip = req.headers.get('x-forwarded-for') || 'unknown-ip';
+    logToConsole(`IP client: ${ip}`);
     
     // Vérification du rate limit
     const now = Date.now();
@@ -49,6 +63,7 @@ export async function POST(req: NextRequest) {
     
     // Vérification si le quota est dépassé
     if (userRateLimit.count >= RATE_LIMIT_MAX) {
+      logToConsole(`Rate limit dépassé pour l'IP: ${ip}`);
       return NextResponse.json(
         { error: 'Quota de requêtes dépassé. Veuillez réessayer plus tard.' },
         { status: 429 }
@@ -58,9 +73,12 @@ export async function POST(req: NextRequest) {
     // Extraction et validation du corps de la requête
     let messages;
     try {
+      logToConsole('Analyse du corps de la requête');
       const body = await req.json();
       messages = body.messages;
+      logToConsole('Corps de la requête analysé avec succès', { messageCount: messages.length });
     } catch (e) {
+      logToConsole('Erreur lors de l\'analyse du corps de la requête', e);
       return NextResponse.json(
         { error: 'Format de requête invalide' },
         { status: 400 }
@@ -68,6 +86,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!messages || !validateMessages(messages)) {
+      logToConsole('Validation des messages échouée', { messages });
       return NextResponse.json(
         { error: 'Format de messages invalide ou manquant' },
         { status: 400 }
@@ -80,19 +99,28 @@ export async function POST(req: NextRequest) {
     // Vérification du cache
     const cachedResponse = responseCache.get(cacheKey);
     if (cachedResponse && cachedResponse.expiry > Date.now()) {
+      logToConsole('Réponse trouvée dans le cache');
       return NextResponse.json({ message: cachedResponse.data });
     }
 
     // Incrémentation du compteur de rate limit
     userRateLimit.count++;
     rateLimitStore.set(ip, userRateLimit);
+    logToConsole(`Rate limit mis à jour: ${userRateLimit.count}/${RATE_LIMIT_MAX}`);
 
     // Définition du timeout pour éviter les requêtes infinies
     const abortController = new AbortController();
-    const timeoutId = setTimeout(() => abortController.abort(), 30000); // 30 secondes
+    const timeoutId = setTimeout(() => {
+      logToConsole('Timeout de la requête atteint (30s)');
+      abortController.abort();
+    }, 30000); // 30 secondes
 
     try {
       // Appel à l'API OpenAI avec la nouvelle syntaxe
+      logToConsole('Début de l\'appel à l\'API OpenAI');
+      logToConsole('Modèle utilisé: gpt-4');
+      logToConsole('Nombre de messages: ' + messages.length);
+      
       const completion = await openai.chat.completions.create({
         model: 'gpt-4',
         messages: [
@@ -146,10 +174,12 @@ IMPORTANT: Tu n'as pas besoin de t'excuser de ne pas avoir accès en temps réel
 
       // Nettoyage du timeout
       clearTimeout(timeoutId);
+      logToConsole('Réponse OpenAI reçue avec succès');
 
       const assistantMessage = completion.choices[0]?.message;
 
       if (!assistantMessage) {
+        logToConsole('Aucune réponse générée par OpenAI');
         return NextResponse.json(
           { error: 'Aucune réponse générée' },
           { status: 500 }
@@ -161,17 +191,31 @@ IMPORTANT: Tu n'as pas besoin de t'excuser de ne pas avoir accès en temps réel
         data: assistantMessage,
         expiry: Date.now() + CACHE_TTL
       });
+      logToConsole('Réponse mise en cache');
 
       return NextResponse.json({ message: assistantMessage });
     } catch (error: any) {
       // Nettoyage du timeout en cas d'erreur
       clearTimeout(timeoutId);
+      logToConsole('Erreur pendant l\'appel à OpenAI', { 
+        name: error.name, 
+        message: error.message, 
+        status: error.status,
+        code: error.code,
+        stack: error.stack
+      });
       
       // Propagation de l'erreur pour être traitée dans le bloc catch extérieur
       throw error;
     }
   } catch (error: any) {
-    console.error('Erreur API OpenAI:', error);
+    logToConsole('Erreur API OpenAI', { 
+      name: error.name, 
+      message: error.message, 
+      status: error.status,
+      code: error.code,
+      stack: error.stack
+    });
     
     // Gestion des différentes erreurs possibles
     if (error.name === 'AbortError') {
@@ -192,7 +236,7 @@ IMPORTANT: Tu n'as pas besoin de t'excuser de ne pas avoir accès en temps réel
     }
     
     return NextResponse.json(
-      { error: 'Erreur lors de la génération de la réponse' },
+      { error: 'Erreur lors de la génération de la réponse: ' + error.message },
       { status: 500 }
     );
   }

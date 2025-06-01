@@ -1,6 +1,15 @@
 // Utiliser un fetch pour accéder aux données en production, import statique en développement
 import staticBusinessData from '@/data/sudbury_businesses.json';
 
+// Fonction utilitaire pour le logging
+const logToConsole = (message: string, data?: any) => {
+  const timestamp = new Date().toISOString();
+  console.log(`[BUSINESS-DIRECTORY ${timestamp}] ${message}`);
+  if (data) {
+    console.log(JSON.stringify(data, null, 2));
+  }
+};
+
 export interface Business {
   id: string;
   name: string;
@@ -24,25 +33,64 @@ let businessData: { businesses: Business[], categories: string[] } = {
 
 // Fonction pour charger les données
 const loadBusinessData = async () => {
+  logToConsole('Début du chargement des données des entreprises');
+  logToConsole(`Environnement: ${process.env.NODE_ENV}`);
+  
   try {
     // En production (Netlify), charger le fichier depuis l'URL publique
     if (process.env.NODE_ENV === 'production') {
       // Utilisez une URL absolue pour éviter les problèmes de parsing
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://intelletix-ai-agent.netlify.app';
-      const response = await fetch(`${baseUrl}/data/sudbury_businesses.json`);
-      if (!response.ok) {
-        throw new Error(`Erreur lors du chargement des données: ${response.status}`);
+      const jsonUrl = `${baseUrl}/data/sudbury_businesses.json`;
+      
+      logToConsole(`Tentative de chargement depuis URL: ${jsonUrl}`);
+      
+      try {
+        const response = await fetch(jsonUrl);
+        
+        if (!response.ok) {
+          logToConsole(`Erreur HTTP lors du chargement: ${response.status} ${response.statusText}`);
+          throw new Error(`Erreur lors du chargement des données: ${response.status}`);
+        }
+        
+        const contentType = response.headers.get('content-type');
+        logToConsole(`Type de contenu reçu: ${contentType}`);
+        
+        const data = await response.json();
+        logToConsole('Données JSON analysées avec succès', {
+          businessCount: data.businesses?.length,
+          categoryCount: data.categories?.length
+        });
+        
+        businessData = data;
+        logToConsole('Données chargées depuis l\'URL publique');
+      } catch (fetchError: any) {
+        logToConsole('Erreur fetch détaillée', {
+          name: fetchError.name,
+          message: fetchError.message,
+          cause: fetchError.cause,
+          stack: fetchError.stack
+        });
+        throw fetchError;
       }
-      businessData = await response.json();
-      console.log('Données chargées depuis l\'URL publique');
     } else {
       // En développement, utiliser l'import statique
       businessData = staticBusinessData;
-      console.log('Données chargées depuis l\'import statique');
+      logToConsole('Données chargées depuis l\'import statique', {
+        businessCount: businessData.businesses?.length,
+        categoryCount: businessData.categories?.length
+      });
     }
-  } catch (error) {
-    console.error('Erreur lors du chargement des données des entreprises:', error);
+  } catch (error: any) {
+    logToConsole('Erreur lors du chargement des données des entreprises', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      cause: error.cause
+    });
+    
     // Utiliser les données statiques comme fallback en cas d'erreur
+    logToConsole('Utilisation des données statiques comme fallback');
     businessData = staticBusinessData;
   }
 };
@@ -54,8 +102,11 @@ loadBusinessData();
 export const getAllBusinesses = async (): Promise<Business[]> => {
   // Si les données ne sont pas encore chargées, attendre leur chargement
   if (businessData.businesses.length === 0) {
+    logToConsole('Données manquantes, rechargement...');
     await loadBusinessData();
   }
+  
+  logToConsole(`Retour de ${businessData.businesses.length} entreprises`);
   return businessData.businesses as Business[];
 };
 
@@ -63,37 +114,50 @@ export const getAllBusinesses = async (): Promise<Business[]> => {
 export const getAllCategories = async (): Promise<string[]> => {
   // Si les données ne sont pas encore chargées, attendre leur chargement
   if (businessData.categories.length === 0) {
+    logToConsole('Catégories manquantes, rechargement...');
     await loadBusinessData();
   }
+  
+  logToConsole(`Retour de ${businessData.categories.length} catégories`);
   return businessData.categories as string[];
 };
 
 // Récupérer les entreprises par catégorie
 export const getBusinessesByCategory = async (category: string): Promise<Business[]> => {
+  logToConsole(`Recherche d'entreprises par catégorie: ${category}`);
   const businesses = await getAllBusinesses();
-  return businesses.filter(business => 
+  const results = businesses.filter(business => 
     business.category.toLowerCase() === category.toLowerCase()
   );
+  logToConsole(`Trouvé ${results.length} entreprises pour la catégorie ${category}`);
+  return results;
 };
 
 // Récupérer une entreprise par ID
 export const getBusinessById = async (id: string): Promise<Business | undefined> => {
+  logToConsole(`Recherche d'entreprise par ID: ${id}`);
   const businesses = await getAllBusinesses();
-  return businesses.find(business => business.id === id);
+  const result = businesses.find(business => business.id === id);
+  logToConsole(`Entreprise trouvée: ${result ? 'Oui' : 'Non'}`);
+  return result;
 };
 
 // Rechercher des entreprises par terme de recherche
 export const searchBusinesses = async (searchTerm: string): Promise<Business[]> => {
+  logToConsole(`Recherche par terme: ${searchTerm}`);
   const businesses = await getAllBusinesses();
   const term = searchTerm.toLowerCase();
   
-  return businesses.filter(business => 
+  const results = businesses.filter(business => 
     business.name.toLowerCase().includes(term) ||
     business.description.toLowerCase().includes(term) ||
     business.category.toLowerCase().includes(term) ||
     business.subcategory.toLowerCase().includes(term) ||
     business.services.some(service => service.toLowerCase().includes(term))
   );
+  
+  logToConsole(`Trouvé ${results.length} résultats pour le terme "${searchTerm}"`);
+  return results;
 };
 
 // Recherche avancée avec plusieurs critères
@@ -105,6 +169,7 @@ export interface SearchCriteria {
 }
 
 export const advancedSearch = async (criteria: SearchCriteria): Promise<Business[]> => {
+  logToConsole('Recherche avancée avec critères', criteria);
   let results = await getAllBusinesses();
   
   if (criteria.term) {
@@ -138,6 +203,7 @@ export const advancedSearch = async (criteria: SearchCriteria): Promise<Business
     );
   }
   
+  logToConsole(`Résultats de la recherche avancée: ${results.length} entreprises`);
   return results;
 };
 
@@ -159,6 +225,8 @@ export const formatBusinessInfo = (business: Business): string => {
 
 // Suggérer des entreprises en fonction d'un besoin ou d'une requête
 export const suggestBusinesses = async (userQuery: string): Promise<Business[]> => {
+  logToConsole(`Suggestion d'entreprises pour la requête: "${userQuery}"`);
+  
   // Liste de mots-clés associés à différentes catégories
   const keywordMap: Record<string, string[]> = {
     'Restaurant': ['manger', 'restaurant', 'nourriture', 'cuisine', 'repas', 'dîner', 'déjeuner', 'petit-déjeuner'],
@@ -186,13 +254,18 @@ export const suggestBusinesses = async (userQuery: string): Promise<Business[]> 
     }
   });
 
+  logToConsole(`Catégories correspondantes: ${matchedCategories.join(', ') || 'Aucune'}`);
+
   // Si des catégories correspondent, renvoyer les entreprises de ces catégories
   if (matchedCategories.length > 0) {
-    return businesses.filter(business => 
+    const results = businesses.filter(business => 
       matchedCategories.includes(business.category)
     );
+    logToConsole(`Trouvé ${results.length} entreprises par catégories correspondantes`);
+    return results;
   }
 
   // Si aucune correspondance par mot-clé, faire une recherche générale
+  logToConsole('Aucune catégorie correspondante, recours à la recherche générale');
   return searchBusinesses(userQuery);
 }; 
