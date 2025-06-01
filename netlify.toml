@@ -58,3 +58,12 @@
   #  publish = "dist" # Folder with the static content for _redirect file
 
   ## more info on configuring this file: https://ntl.fyi/file-based-build-config
+
+# Options pour les fonctions Netlify
+[functions]
+  # Augmenter le timeout pour les fonctions serverless
+  timeout = 30
+  # Augmenter la limite de mémoire
+  memory = 1024
+  # Activer les logs détaillés
+  debug = true

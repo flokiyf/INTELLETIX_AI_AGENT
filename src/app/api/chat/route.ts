@@ -116,13 +116,13 @@ export async function POST(req: NextRequest) {
     }, 30000); // 30 secondes
 
     try {
-      // Appel à l'API OpenAI avec la nouvelle syntaxe
+      // Appel à l'API OpenAI avec gestion améliorée des erreurs
       logToConsole('Début de l\'appel à l\'API OpenAI');
-      logToConsole('Modèle utilisé: gpt-4');
+      logToConsole('Modèle utilisé: gpt-3.5-turbo'); // Changer pour un modèle plus rapide et plus fiable
       logToConsole('Nombre de messages: ' + messages.length);
       
       const completion = await openai.chat.completions.create({
-        model: 'gpt-4',
+        model: 'gpt-3.5-turbo', // Utiliser un modèle plus léger et fiable pour éviter les timeouts
         messages: [
           {
             role: 'system',
@@ -166,7 +166,7 @@ IMPORTANT: Tu n'as pas besoin de t'excuser de ne pas avoir accès en temps réel
           },
           ...messages
         ],
-        max_tokens: 800,
+        max_tokens: 500, // Réduire pour éviter les problèmes de taille de réponse
         temperature: 0.7,
       }, {
         signal: abortController.signal
@@ -205,7 +205,6 @@ IMPORTANT: Tu n'as pas besoin de t'excuser de ne pas avoir accès en temps réel
         stack: error.stack
       });
       
-      // Propagation de l'erreur pour être traitée dans le bloc catch extérieur
       throw error;
     }
   } catch (error: any) {
