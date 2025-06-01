@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Configuration, OpenAIApi } from 'openai';
 
+// Ensure the API key is properly loaded from environment variables
+if (!process.env.OPENAI_API_KEY) {
+  throw new Error('OPENAI_API_KEY is not defined in environment variables');
+}
+
 const configuration = new Configuration({
   apiKey: process.env.OPENAI_API_KEY,
 });
@@ -8,6 +13,13 @@ const openai = new OpenAIApi(configuration);
 
 export async function POST(req: NextRequest) {
   try {
+    if (!configuration.apiKey) {
+      return NextResponse.json(
+        { error: 'OpenAI API key not configured' },
+        { status: 500 }
+      );
+    }
+
     const { messages } = await req.json();
 
     if (!messages || !Array.isArray(messages)) {
@@ -76,11 +88,11 @@ IMPORTANT: Tu n'as pas besoin de t'excuser de ne pas avoir accès en temps réel
     }
 
     return NextResponse.json({ message: assistantMessage });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Erreur API OpenAI:', error);
     return NextResponse.json(
-      { error: 'Erreur lors de la génération de la réponse' },
+      { error: error.message || 'Erreur lors de la génération de la réponse' },
       { status: 500 }
     );
   }
-} 
+}
