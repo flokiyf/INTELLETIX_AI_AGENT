@@ -3,18 +3,16 @@
   command = "npm run build"
   functions = "netlify/functions"
   publish = ".next"
-
-  ## Configuration des variables d'environnement
-  [build.environment]
-    NODE_ENV = "production"
-    NEXT_TELEMETRY_DISABLED = "1"
-    # La clé API OpenAI sera configurée dans les variables d'environnement Netlify
+  environment = { NODE_ENV = "production", NEXT_TELEMETRY_DISABLED = "1" }
 
 # Configuration des plugins
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-# En-têtes HTTP pour améliorer la sécurité et les performances
+[[plugins]]
+  package = "@netlify/plugin-functions-install-core"
+
+# Configuration des en-têtes HTTP
 [[headers]]
   for = "/*"
   [headers.values]
@@ -26,7 +24,7 @@
     Permissions-Policy = "camera=(), microphone=(), geolocation=(), interest-cohort=()"
     Cache-Control = "public, max-age=3600"
 
-# En-têtes spécifiques pour les ressources statiques
+# Configuration des en-têtes spécifiques pour les ressources statiques
 [[headers]]
   for = "/static/*"
   [headers.values]
