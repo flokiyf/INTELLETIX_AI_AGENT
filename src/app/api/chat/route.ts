@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import OpenAI from 'openai';
+import { Configuration, OpenAIApi } from 'openai';
 
-const openai = new OpenAI({
+const configuration = new Configuration({
   apiKey: process.env.OPENAI_API_KEY,
 });
+const openai = new OpenAIApi(configuration);
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,7 +17,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const completion = await openai.chat.completions.create({
+    const completion = await openai.createChatCompletion({
       model: 'gpt-4-turbo',
       messages: [
         {
@@ -65,7 +66,7 @@ IMPORTANT: Tu n'as pas besoin de t'excuser de ne pas avoir accès en temps réel
       temperature: 0.7,
     });
 
-    const assistantMessage = completion.choices[0]?.message;
+    const assistantMessage = completion.data.choices[0]?.message;
 
     if (!assistantMessage) {
       return NextResponse.json(
