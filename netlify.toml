@@ -4,6 +4,11 @@
   functions = "netlify/functions"
   publish = ".next"
 
+  ## Configuration des variables d'environnement
+  [build.environment]
+    NEXT_DISABLE_ESLINT = "1"
+    OPENAI_API_KEY = "${OPENAI_API_KEY}"
+
   ## Uncomment to use this redirect for Single Page Applications like create-react-app.
   ## Not needed for static site generators.
   #[[redirects]]
