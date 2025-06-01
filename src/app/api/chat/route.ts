@@ -22,72 +22,28 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Version ultra-simplifiée de l'API chat pour réduire les erreurs
+// Version ultra-minimaliste de l'API pour tester le déploiement
 export async function POST(req: NextRequest) {
-  logToConsole('Nouvelle requête chat reçue');
+  console.log('Requête API chat reçue - version statique minimaliste');
   
   try {
-    // Extraction simple du corps de la requête
-    const body = await req.json();
-    const messages = body.messages || [];
+    // Réponse statique pour tester le déploiement
+    const responseMessage = {
+      role: "assistant",
+      content: "Bonjour! Je suis l'assistant statique de l'annuaire des entreprises de Sudbury. Cette réponse est codée en dur pour tester le déploiement. Comment puis-je vous aider aujourd'hui?"
+    };
     
-    if (!Array.isArray(messages) || messages.length === 0) {
-      return NextResponse.json(
-        { error: 'Messages invalides ou manquants' },
-        { status: 400 }
-      );
-    }
+    // Retourner toujours la même réponse statique pour tester
+    return NextResponse.json({ message: responseMessage });
+  } catch (error) {
+    console.error('Erreur dans l\'API statique:', error);
     
-    logToConsole(`Traitement de ${messages.length} messages`);
-
-    // Version très simplifiée de l'appel à OpenAI pour minimiser les erreurs
-    try {
-      // Réponse statique de secours au cas où OpenAI échoue
-      const fallbackResponse = {
+    // Même en cas d'erreur, retourner une réponse statique
+    return NextResponse.json({ 
+      message: {
         role: "assistant",
-        content: "Bonjour! Je suis l'assistant de l'annuaire des entreprises de Sudbury. Comment puis-je vous aider aujourd'hui?"
-      };
-      
-      // Tentative d'appel à OpenAI avec un timeout court
-      const completion = await Promise.race([
-        openai.chat.completions.create({
-          model: 'gpt-3.5-turbo',
-          messages: [
-            {
-              role: 'system',
-              content: 'Tu es un assistant pour l\'annuaire des entreprises de Sudbury.'
-            },
-            ...messages
-          ],
-          max_tokens: 256,
-          temperature: 0.7,
-        }),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout')), 10000)
-        )
-      ]) as any;
-      
-      logToConsole('Réponse OpenAI reçue');
-      const assistantMessage = completion.choices[0]?.message || fallbackResponse;
-      
-      return NextResponse.json({ message: assistantMessage });
-    } catch (error: any) {
-      logToConsole(`Erreur OpenAI: ${error.message}`);
-      
-      // En cas d'erreur, on renvoie une réponse par défaut pour éviter de casser l'interface
-      return NextResponse.json({
-        message: {
-          role: "assistant",
-          content: "Je suis désolé, je rencontre actuellement des difficultés techniques. Veuillez réessayer dans quelques instants."
-        }
-      });
-    }
-  } catch (error: any) {
-    logToConsole(`Erreur générale: ${error.message}`);
-    
-    return NextResponse.json(
-      { error: 'Une erreur est survenue lors du traitement de votre demande.' },
-      { status: 500 }
-    );
+        content: "Désolé, une erreur s'est produite. Ceci est une réponse de secours statique."
+      }
+    });
   }
 } 
