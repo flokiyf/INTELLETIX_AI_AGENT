@@ -67,3 +67,18 @@
   memory = 1024
   # Activer les logs détaillés
   debug = true
+  # Dossier des fonctions Node.js
+  directory = "netlify/functions"
+  # Inclure les fichiers Node.js
+  node_bundler = "esbuild"
+  # Configuration des fonctions individuelles
+  [functions.api-chat]
+    timeout = 30
+    memory = 1024
+
+# Redirection pour les routes d'API
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+  force = true
